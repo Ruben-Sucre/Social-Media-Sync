@@ -1,0 +1,4 @@
+polars>=0.20.0
+yt-dlp>=2024.01.01
+pathlib2>=2.3.7 ; python_version < '3.8'
+# Note: `pathlib` is part of the stdlib (Py3.8+). Include `pathlib2` only for older Pythons.
