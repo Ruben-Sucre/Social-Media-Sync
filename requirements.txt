@@ -1,4 +1,4 @@
-polars>=0.20.0
+polars-lts-cpu>=0.20.0
 yt-dlp>=2024.01.01
 fake-useragent>=1.4.0
 pathlib2>=2.3.7 ; python_version < '3.8'
