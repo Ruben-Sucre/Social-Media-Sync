@@ -9,6 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 import polars as pl
+from moviepy.editor import VideoFileClip, vfx
+import random
+from datetime import datetime, timezone
 
 from scripts.common import (
     BASE_DIR,
@@ -22,7 +25,7 @@ from scripts.common import (
 
 
 def process_pending() -> int:
-    """Move pending raw videos to processed and update inventory.
+    """Process pending raw videos, apply transformations, and update inventory.
 
     Returns the number of videos processed.
     """
@@ -42,17 +45,48 @@ def process_pending() -> int:
             logger.warning("Raw file not found for %s: %s", row.get("video_id"), src)
             continue
 
-        PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-        dst = PROCESSED_DIR / src.name
-        # For now we simply move the file. Future edits (crop, re-encode) go here.
-        shutil.move(str(src), str(dst))
+        try:
+            # Load video
+            clip = VideoFileClip(str(src))
 
-        new_rel = str(dst.relative_to(BASE_DIR))
-        update_inventory_by_video_id(row.get("video_id"), {"path_local": new_rel})
-        processed_count += 1
-        logger.info("Moved %s -> %s", src, dst)
+            # Define transformations
+            transformations = [
+                lambda c: c.fx(vfx.mirror_x),
+                lambda c: c.crop(x1=c.w * 0.05, y1=c.h * 0.05, x2=c.w * 0.95, y2=c.h * 0.95).resize(height=c.h),
+                lambda c: c.fx(vfx.colorx, random.uniform(0.9, 1.1)),
+                lambda c: c.fx(vfx.speedx, random.uniform(1.01, 1.03)),
+            ]
 
-        # TODO: Integrate MoviePy processing here (trim, resize, overlay watermark, etc.)
+            # Apply random transformations
+            selected_transforms = random.sample(transformations, k=2)
+            for transform in selected_transforms:
+                clip = transform(clip)
+
+            # Export processed video
+            PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+            dst = PROCESSED_DIR / src.name
+            clip.write_videofile(
+                str(dst), codec="libx264", audio_codec="aac", remove_temp=True
+            )
+
+            # Update inventory
+            new_rel = str(dst.relative_to(BASE_DIR))
+            update_inventory_by_video_id(
+                row.get("video_id"),
+                {
+                    "path_local": new_rel,
+                    "status_fb": "ready",
+                    "updated_at": datetime.now(timezone.utc),
+                },
+            )
+
+            processed_count += 1
+            logger.info("Processed and transformed %s -> %s", src, dst)
+
+        except Exception as e:
+            logger.error("Failed to process video %s: %s", row.get("video_id"), e)
+        finally:
+            clip.close()
 
     return processed_count
 

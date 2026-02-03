@@ -35,8 +35,8 @@ INVENTORY_COLUMNS = [
     ("duration", pl.Int64),
     ("path_local", pl.Utf8),
     ("status_fb", pl.Utf8),
-    ("created_at", pl.Datetime(time_zone=None)),
-    ("updated_at", pl.Datetime(time_zone=None)),
+    ("created_at", pl.Datetime("us", "UTC")),
+    ("updated_at", pl.Datetime("us", "UTC")),
 ]
 
 
@@ -89,6 +89,10 @@ def ensure_inventory() -> None:
 
             cols = {name: pl.Series(name, [], dtype=dtype) for name, dtype in INVENTORY_COLUMNS}
             df = pl.DataFrame(cols)
+            df = df.with_columns(
+                df["created_at"].dt.convert_time_zone("UTC"),
+                df["updated_at"].dt.convert_time_zone("UTC"),
+            )
             df.write_parquet(INVENTORY_PATH)
             logger.info("Created new inventory at %s", INVENTORY_PATH)
     except Exception:
@@ -103,9 +107,19 @@ def _read_inventory_lazy() -> pl.LazyFrame:
 
 
 def read_inventory() -> pl.DataFrame:
-    """Return an eager DataFrame of the whole inventory."""
-    ensure_inventory()
-    return pl.read_parquet(INVENTORY_PATH)
+    """Read the inventory file and return it as a Polars DataFrame."""
+    ensure_dirs()
+    if not INVENTORY_PATH.exists():
+        cols = {name: pl.Series(name, [], dtype=dtype) for name, dtype in INVENTORY_COLUMNS}
+        df = pl.DataFrame(cols)
+        df.write_parquet(INVENTORY_PATH)
+        return df
+
+    df = pl.read_parquet(INVENTORY_PATH)
+    return df.with_columns(
+        df["created_at"].dt.convert_time_zone("UTC"),
+        df["updated_at"].dt.convert_time_zone("UTC"),
+    )
 
 
 def _append_to_inventory(rows: Iterable[Dict]) -> None:
@@ -120,6 +134,10 @@ def _append_to_inventory(rows: Iterable[Dict]) -> None:
     if new_df.is_empty():
         return
 
+    new_df = new_df.with_columns(
+        new_df["created_at"].dt.convert_time_zone("UTC"),
+        new_df["updated_at"].dt.convert_time_zone("UTC"),
+    )
     lock = FileLock(str(LOCK_PATH))
     try:
         with lock:
