@@ -10,7 +10,7 @@ installed and Playwright/other browsers are set up when needed.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from fake_useragent import UserAgent
@@ -140,8 +140,8 @@ def ingest(source_url: str) -> None:
         "duration": int(info.get("duration") or 0),
         "path_local": path_local,
         "status_fb": "pending",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
     }
 
     _append_to_inventory([row])
