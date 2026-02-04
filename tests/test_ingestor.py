@@ -1,5 +1,4 @@
 import logging
-from unittest import mock
 from datetime import datetime, timezone, timedelta
 
 import polars as pl
@@ -73,7 +72,9 @@ def test_ingest_success(tmp_env, monkeypatch, caplog):
     video_id = "VID123"
     source_url = "https://example.com/source"
 
-    listing = {"entries": [{"id": video_id, "url": f"https://example.com/watch/{video_id}"}]}
+    listing = {
+        "entries": [{"id": video_id, "url": f"https://example.com/watch/{video_id}"}]
+    }
     download_info = {
         "id": video_id,
         "webpage_url": f"https://example.com/watch/{video_id}",
@@ -123,7 +124,9 @@ def test_ingest_duplicate_prevention(tmp_env, monkeypatch, caplog):
     video_id = "VIDDUP"
     source_url = "https://example.com/source_dup"
 
-    listing = {"entries": [{"id": video_id, "url": f"https://example.com/watch/{video_id}"}]}
+    listing = {
+        "entries": [{"id": video_id, "url": f"https://example.com/watch/{video_id}"}]
+    }
     download_info = {
         "id": video_id,
         "webpage_url": f"https://example.com/watch/{video_id}",

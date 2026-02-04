@@ -3,3 +3,6 @@ yt-dlp
 moviepy
 filelock
 fake-useragent
+
+# Development dependencies
+ruff

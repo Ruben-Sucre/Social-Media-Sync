@@ -6,6 +6,7 @@
 These primitives make it easy for a workflow system like n8n to query and mark
 videos as posted after successful uploads.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,7 +55,9 @@ def cli_get_next() -> Optional[str]:
                     # don't return yet; allow marking of earlier missing files
                     break
                 # mark as failed in the in-memory DF (we're holding the lock)
-                logger.error("Processed file missing for %s: %s", row.get("video_id"), candidate)
+                logger.error(
+                    "Processed file missing for %s: %s", row.get("video_id"), candidate
+                )
                 to_mark_failed.append(row.get("video_id"))
 
             if to_mark_failed:
@@ -105,9 +108,15 @@ def cli_mark_failed(video_id: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--get-next", action="store_true", help="Print next processed video path")
-    parser.add_argument("--mark-posted", metavar="VIDEO_ID", help="Mark a video as posted")
-    parser.add_argument("--mark-failed", metavar="VIDEO_ID", help="Mark a video as failed")
+    parser.add_argument(
+        "--get-next", action="store_true", help="Print next processed video path"
+    )
+    parser.add_argument(
+        "--mark-posted", metavar="VIDEO_ID", help="Mark a video as posted"
+    )
+    parser.add_argument(
+        "--mark-failed", metavar="VIDEO_ID", help="Mark a video as failed"
+    )
 
     args = parser.parse_args()
 

@@ -3,16 +3,16 @@
 - Uses project root relative to the `scripts` package so paths remain portable.
 - Provides lightweight helpers around a Parquet "inventory" using Polars.
 """
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Dict
+from typing import Iterable, Dict
 
 import polars as pl
 from filelock import FileLock
-
 
 
 # --- Paths ---------------------------------------------------------------
@@ -42,7 +42,6 @@ INVENTORY_COLUMNS = [
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
-
 
 
 # --- Logging ------------------------------------------------------------
@@ -87,7 +86,10 @@ def ensure_inventory() -> None:
             if INVENTORY_PATH.exists():
                 return
 
-            cols = {name: pl.Series(name, [], dtype=dtype) for name, dtype in INVENTORY_COLUMNS}
+            cols = {
+                name: pl.Series(name, [], dtype=dtype)
+                for name, dtype in INVENTORY_COLUMNS
+            }
             df = pl.DataFrame(cols)
             df = df.with_columns(
                 df["created_at"].dt.convert_time_zone("UTC"),
@@ -110,7 +112,9 @@ def read_inventory() -> pl.DataFrame:
     """Read the inventory file and return it as a Polars DataFrame."""
     ensure_dirs()
     if not INVENTORY_PATH.exists():
-        cols = {name: pl.Series(name, [], dtype=dtype) for name, dtype in INVENTORY_COLUMNS}
+        cols = {
+            name: pl.Series(name, [], dtype=dtype) for name, dtype in INVENTORY_COLUMNS
+        }
         df = pl.DataFrame(cols)
         df.write_parquet(INVENTORY_PATH)
         return df
@@ -197,8 +201,11 @@ def find_next_processed_pending() -> Dict | None:
     """Return the first processed video with status 'pending', or None."""
     lf = _read_inventory_lazy()
     res = (
-        lf.filter((pl.col("status_fb") == "pending") & pl.col("path_local").str.contains("processed"))
-        .select(["video_id", "path_local"]) 
+        lf.filter(
+            (pl.col("status_fb") == "pending")
+            & pl.col("path_local").str.contains("processed")
+        )
+        .select(["video_id", "path_local"])
         .limit(1)
         .collect()
     )

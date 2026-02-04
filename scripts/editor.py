@@ -4,6 +4,7 @@ The module selects the first pending raw clip, performs subtle zoom/color/speed
 adjustments, renders the transformed version into `videos/processed/`, and
 updates the inventory metadata accordingly.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,6 +25,7 @@ from scripts.common import (
     update_inventory_by_video_id,
     logger,
 )
+
 
 def _select_first_pending_row(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
     """Return the first inventory row marked as pending."""

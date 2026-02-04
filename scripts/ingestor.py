@@ -8,6 +8,7 @@ This module provides small, testable functions that:
 Note: The download step uses yt-dlp programmatically; ensure the package is
 installed and Playwright/other browsers are set up when needed.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -62,7 +63,12 @@ def _resolve_user_agent() -> str:
 
 def _already_exists(video_id: str) -> bool:
     lf = _read_inventory_lazy()
-    exists = lf.filter(pl.col("video_id") == video_id).select(pl.col("video_id")).limit(1).collect()
+    exists = (
+        lf.filter(pl.col("video_id") == video_id)
+        .select(pl.col("video_id"))
+        .limit(1)
+        .collect()
+    )
     return exists.height > 0
 
 
@@ -139,7 +145,9 @@ def ingest(source_url: str) -> None:
 
     row = {
         "video_id": video_id,
-        "source_url": info.get("webpage_url") or target_entry.get("webpage_url") or source_url,
+        "source_url": info.get("webpage_url")
+        or target_entry.get("webpage_url")
+        or source_url,
         "title": info.get("title", ""),
         "duration": int(info.get("duration") or 0),
         "path_local": path_local,
