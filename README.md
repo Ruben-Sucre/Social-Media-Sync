@@ -49,11 +49,12 @@ python -m scripts.ingestor "<source_url>"
 python -m scripts.editor
 ```
 
-- Publicador (CLI): obtener el siguiente procesado o marcar un video como publicado:
+- Publicador (CLI): obtener el siguiente procesado, marcar un video como publicado o como fallido:
 
 ```bash
 python -m scripts.publicador --get-next
 python -m scripts.publicador --mark-posted <VIDEO_ID>
+python -m scripts.publicador --mark-failed <VIDEO_ID>  # Marca videos fallidos durante la subida externa (n8n).
 ```
 
 ## Tests
