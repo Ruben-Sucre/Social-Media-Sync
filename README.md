@@ -59,13 +59,28 @@ python -m scripts.publicador --mark-failed <VIDEO_ID>  # Marca videos fallidos d
 
 ## Tests
 
-Ejecuta la suite de tests con:
 
-```bash
-pytest -v tests
-```
+## Pruebas
 
-Los tests usan `pytest` y `pytest-mock` y simulan MoviePy para ejecuciones rápidas y deterministas.
+El proyecto cuenta con una suite de tests robusta que cubre los principales flujos de ingestión, edición y publicación de videos.
+
+- Ejecuta todos los tests con:
+	```bash
+	pytest -v tests
+	```
+- Los tests utilizan `pytest` y `pytest-mock` para simular dependencias externas como MoviePy y YoutubeDL, permitiendo ejecuciones rápidas y deterministas.
+- Se han implementado mocks y pruebas de excepciones para asegurar la robustez ante errores y casos límite.
+- La integración continua (CI) ejecuta automáticamente los tests en cada push o pull request usando GitHub Actions.
+
+## Manejo de Errores
+
+El sistema implementa un manejo de errores centralizado y explícito:
+
+- Todas las operaciones críticas (ingestión, edición, publicación) capturan y reportan excepciones personalizadas definidas en `scripts/exceptions.py`.
+- Los errores se registran en logs y el inventario se actualiza con el estado correspondiente (`failed`, etc.), permitiendo trazabilidad y recuperación.
+- Los tests incluyen casos de error para validar que el sistema responde correctamente ante fallos de red, archivos corruptos o dependencias externas.
+
+Esto garantiza que el flujo de trabajo sea resiliente y fácil de depurar ante cualquier incidente.
 
 ## Notas de diseño
 
