@@ -151,7 +151,12 @@ def ingest(source_url: str, retries: int = 3) -> None:
         info = retry(retries=retries, base=5.0, factor=3.0, max_wait=90.0, jitter=True)(_do_download)()
     except Exception as exc:
         logger.error("Download failed for %s after retries: %s", target_url, exc)
-        _update_inventory_status(video_id, "failed")
+        from scripts.common import update_inventory_by_video_id
+        if video_id:
+            try:
+                update_inventory_by_video_id(video_id, {"status_fb": "failed"})
+            except Exception as update_exc:
+                logger.error("Failed to mark video %s as failed in inventory: %s", video_id, update_exc)
         raise DownloadError(f"Failed to download {target_url} after {retries} attempts") from exc
 
     video_id = cast(str, info.get("id")) if info.get("id") is not None else (
@@ -186,12 +191,3 @@ def ingest(source_url: str, retries: int = 3) -> None:
     logger.info("Downloaded %s", video_id)
 
 
-def _update_inventory_status(video_id: str, status: str) -> None:
-    """Update the status of a video in the inventory."""
-    try:
-        lf = _read_inventory_lazy()
-        lf = lf.with_columns(pl.when(pl.col("video_id") == video_id).then(status).otherwise(pl.col("status_fb")))
-        lf.write_parquet(BASE_DIR / "data/inventario_videos.parquet")
-    except Exception as exc:
-        logger.exception("Failed to update status for %s: %s", video_id, exc)
-        raise InventoryUpdateError(f"Failed to update status for {video_id}") from exc

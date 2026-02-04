@@ -184,7 +184,8 @@ def test_resolve_user_agent(monkeypatch):
 @patch("scripts.ingestor.YoutubeDL")
 @patch("scripts.ingestor._already_exists", return_value=False)
 @patch("scripts.ingestor._append_to_inventory")
-def test_ingest_success(mock_append, mock_exists, mock_ydl_class):
+@patch("scripts.common.update_inventory_by_video_id")
+def test_ingest_success(mock_update_inventory, mock_append, mock_exists, mock_ydl_class):
     """Test successful ingestion."""
     # Mock para el primer YoutubeDL (listing)
     mock_ydl_listing = MagicMock()
@@ -194,7 +195,6 @@ def test_ingest_success(mock_append, mock_exists, mock_ydl_class):
     }
     mock_ydl_listing.__enter__.return_value = mock_ydl_listing
     mock_ydl_listing.__exit__.return_value = False
-    
     # Mock para el segundo YoutubeDL (download)
     mock_ydl_download = MagicMock()
     mock_ydl_download.extract_info.return_value = {
@@ -204,17 +204,15 @@ def test_ingest_success(mock_append, mock_exists, mock_ydl_class):
     }
     mock_ydl_download.__enter__.return_value = mock_ydl_download
     mock_ydl_download.__exit__.return_value = False
-    
     # Configurar el mock_ydl_class para devolver primero listing y luego download
     mock_ydl_class.side_effect = [mock_ydl_listing, mock_ydl_download]
-
     ingest("http://example.com/video")
     mock_append.assert_called_once()
 
 
 @patch("scripts.ingestor.YoutubeDL")
 @patch("scripts.ingestor._already_exists", return_value=False)
-@patch("scripts.ingestor._update_inventory_status")
+@patch("scripts.common.update_inventory_by_video_id")
 def test_ingest_download_error(mock_update_status, mock_exists, mock_ydl_class):
     """Test ingestion with download error."""
     # Mock para el primer YoutubeDL (listing)
@@ -225,13 +223,11 @@ def test_ingest_download_error(mock_update_status, mock_exists, mock_ydl_class):
     }
     mock_ydl_listing.__enter__.return_value = mock_ydl_listing
     mock_ydl_listing.__exit__.return_value = False
-    
     # Mock para el segundo YoutubeDL (download) que falla
     mock_ydl_download = MagicMock()
     mock_ydl_download.extract_info.side_effect = Exception("Download failed")
     mock_ydl_download.__enter__.return_value = mock_ydl_download
     mock_ydl_download.__exit__.return_value = False
-    
     # Configurar el mock_ydl_class para devolver primero listing y luego download
     mock_ydl_class.side_effect = [mock_ydl_listing, mock_ydl_download]
 
@@ -252,7 +248,6 @@ def test_ingest_inventory_update_error(mock_append, mock_exists, mock_ydl_class)
     }
     mock_ydl_listing.__enter__.return_value = mock_ydl_listing
     mock_ydl_listing.__exit__.return_value = False
-    
     # Mock para el segundo YoutubeDL (download)
     mock_ydl_download = MagicMock()
     mock_ydl_download.extract_info.return_value = {
@@ -262,10 +257,8 @@ def test_ingest_inventory_update_error(mock_append, mock_exists, mock_ydl_class)
     }
     mock_ydl_download.__enter__.return_value = mock_ydl_download
     mock_ydl_download.__exit__.return_value = False
-    
     # Configurar el mock_ydl_class para devolver primero listing y luego download
     mock_ydl_class.side_effect = [mock_ydl_listing, mock_ydl_download]
-    
     # Hacer que _append_to_inventory falle
     mock_append.side_effect = Exception("Inventory update failed")
 
