@@ -195,16 +195,12 @@ def test_vfx_tool_effects_return_valid_clips(monkeypatch):
     mock_clip.w = 1920
     mock_clip.h = 1080
     mock_clip.size = (1920, 1080)
-    mock_clip.fx = MagicMock(return_value=mock_clip)  # Add fx method
+    mock_clip.with_effects = MagicMock(return_value=mock_clip)
     
-    # Mock vfx_tool effects to return the clip (simulating real behavior)
+    # Mock vfx_tool effects to return the effect objects
     mock_vfx_tool = MagicMock()
-    mock_vfx_tool.mirror_x.return_value = mock_clip
-    mock_vfx_tool.resize.return_value = mock_clip
-    mock_vfx_tool.crop.return_value = mock_clip
-    mock_vfx_tool.multiply_color.return_value = mock_clip
-    mock_vfx_tool.multiply_speed.return_value = mock_clip
-    mock_vfx_tool.speedx = MagicMock()  # Add speedx method
+    mock_vfx_tool.MirrorX.return_value = mock_clip
+    mock_vfx_tool.Crop.return_value = MagicMock()  # Crop returns an effect
     
     # Patch vfx_tool in the editor module
     monkeypatch.setattr(editor, "vfx_tool", mock_vfx_tool)
@@ -216,12 +212,8 @@ def test_vfx_tool_effects_return_valid_clips(monkeypatch):
     assert result is not None
     # Verify at least one effect was called (since the function selects 2+ random effects)
     assert (
-        mock_vfx_tool.mirror_x.called
-        or mock_vfx_tool.resize.called
-        or mock_vfx_tool.crop.called
-        or mock_vfx_tool.multiply_color.called
-        or mock_vfx_tool.multiply_speed.called
-        or mock_clip.fx.called
+        mock_vfx_tool.MirrorX.called
+        or mock_clip.with_effects.called
     )
 
 

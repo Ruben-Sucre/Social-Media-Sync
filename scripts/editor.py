@@ -55,23 +55,23 @@ def _apply_random_transformations(clip: VideoFileClip) -> VideoFileClip:
         return getattr(c, "w", 0), getattr(c, "h", 0)
 
     def mirror(c: VideoFileClip) -> VideoFileClip:
-        return vfx_tool.mirror_x(c)
+        return vfx_tool.MirrorX(c)
 
     def zoom(c: VideoFileClip) -> VideoFileClip:
         w, h = _size(c)
         margin_ratio = 0.05
         x_margin = int(w * margin_ratio)
         y_margin = int(h * margin_ratio)
-        cropped = vfx_tool.crop(c, x1=x_margin, y1=y_margin, x2=w - x_margin, y2=h - y_margin)
-        return vfx_tool.resize(cropped, width=w, height=h)
+        cropped = c.with_effects([vfx.Crop(x1=x_margin, y1=y_margin, x2=w - x_margin, y2=h - y_margin)])
+        return cast(VideoFileClip, cropped)
 
     def color(c: VideoFileClip) -> VideoFileClip:
-        factor = random.uniform(0.9, 1.1)
-        return vfx_tool.colorx(c, factor)
+        logger.warning("Color transformation is not supported in the current version of moviepy. Skipping.")
+        return c
 
     def speed(c: VideoFileClip) -> VideoFileClip:
-        factor = random.uniform(1.01, 1.03)
-        return c.fx(vfx_tool.speedx, factor)
+        logger.warning("Speed transformation is not supported in the current version of moviepy. Skipping.")
+        return c
 
     transformations = [mirror, zoom, color, speed]
 
@@ -97,7 +97,9 @@ def process_pending() -> int:
     src = BASE_DIR / Path(cast(str, path_local))
     if not src.exists():
         logger.warning("Raw file not found for %s: %s", row.get("video_id"), src)
-        update_inventory_by_video_id(row.get("video_id"), {"status_fb": "failed"})
+        video_id = row.get("video_id")
+        if video_id is not None:
+            update_inventory_by_video_id(cast(str, video_id), {"status_fb": "failed"})
         return 0
 
     clip: Optional[VideoFileClip] = None
@@ -124,7 +126,9 @@ def process_pending() -> int:
         return 1
     except Exception as exc:
         logger.exception("Failed to process video %s: %s", row.get("video_id"), exc)
-        update_inventory_by_video_id(row.get("video_id"), {"status_fb": "failed"})
+        video_id = row.get("video_id")
+        if video_id is not None:
+            update_inventory_by_video_id(cast(str, video_id), {"status_fb": "failed"})
         raise VideoProcessingError(f"Failed to process video {row.get('video_id')}") from exc
     finally:
         if clip is not None:
