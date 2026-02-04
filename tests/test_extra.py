@@ -35,7 +35,7 @@ def test_editor_handles_corrupt_files(monkeypatch):
     def mock_read_inventory():
         raise ComputeError("parquet: File out of specification: The file must end with PAR1")
 
-    monkeypatch.setattr("scripts.common.read_inventory", mock_read_inventory)
+    monkeypatch.setattr("scripts.editor.read_inventory", mock_read_inventory)
 
     with pytest.raises(ComputeError, match="parquet: File out of specification"):
         process_pending()
