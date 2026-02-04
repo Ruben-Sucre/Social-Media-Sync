@@ -1,0 +1,74 @@
+{
+  "name": "Ingestor Production Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source_url",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Set Demo URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "command": "python3 /workspaces/Social-Media-Sync/scripts/ingestor.py {{$node[\"Set Demo URL\"].json[\"source_url\"]}}",
+        "output": "all",
+        "archiveFile": "",
+        "workingDirectory": "/workspaces/Social-Media-Sync",
+        "splitOutput": false
+      },
+      "id": "3",
+      "name": "Run Ingestor",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [640, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Demo URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Demo URL": {
+      "main": [
+        [
+          {
+            "node": "Run Ingestor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "America/New_York"
+  },
+  "staticData": {}
+}

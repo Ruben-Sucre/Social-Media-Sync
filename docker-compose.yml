@@ -27,6 +27,7 @@ services:
       # Configuración de recursos
       - N8N_METRICS=false
       - N8N_LOG_LEVEL=info
+      - N8N_BLOCK_SVC_COMMAND_EXECUTION=false
       
     volumes:
       # Persistencia de datos de n8n (workflows, credenciales, ejecuciones)
@@ -34,6 +35,7 @@ services:
       
       # Montaje del proyecto para que n8n pueda ejecutar los scripts
       - ./:/workspace/social-media-sync:ro
+      - ./scripts:/scripts:ro
       
       # Montaje de videos y logs (lectura/escritura para workflows)
       - ./videos:/workspace/social-media-sync/videos

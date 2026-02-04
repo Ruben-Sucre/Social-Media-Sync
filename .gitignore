@@ -37,3 +37,6 @@ Thumbs.db
 
 # Keep placeholder files
 !*/.gitkeep
+
+# Include all .json files
+!*.json
