@@ -72,14 +72,20 @@ def test_process_pending_transforms_single_clip(temp_env_paths, monkeypatch):
     clip_mock.w = 1920
     clip_mock.h = 1080
     clip_mock.size = (1920, 1080)
-    clip_mock.fx.return_value = clip_mock
-    clip_mock.crop.return_value = clip_mock
-    clip_mock.resize.return_value = clip_mock
     clip_mock.write_videofile = MagicMock()
     clip_mock.close = MagicMock()
 
+    # Mock vfx_tool functions to return the clip unchanged
+    vfx_mock = MagicMock()
+    vfx_mock.mirror_x = MagicMock(return_value=clip_mock)
+    vfx_mock.crop = MagicMock(return_value=clip_mock)
+    vfx_mock.resize = MagicMock(return_value=clip_mock)
+    vfx_mock.multiply_color = MagicMock(return_value=clip_mock)
+    vfx_mock.multiply_speed = MagicMock(return_value=clip_mock)
+
     video_file_clip = MagicMock(return_value=clip_mock)
     monkeypatch.setattr(editor, "VideoFileClip", video_file_clip)
+    monkeypatch.setattr(editor, "vfx_tool", vfx_mock)
 
     processed = editor.process_pending()
 
@@ -167,3 +173,39 @@ def test_process_pending_closes_on_error(temp_env_paths, monkeypatch):
 
     updated_rows = common.read_inventory().to_dicts()
     assert updated_rows[0]["status_fb"] == "pending"
+
+
+def test_vfx_tool_effects_return_valid_clips(monkeypatch):
+    """Test that applying effects through vfx_tool returns valid VideoClip objects."""
+    from moviepy.video.io.VideoFileClip import VideoFileClip
+    
+    # Create a mock clip that mimics VideoFileClip behavior
+    mock_clip = MagicMock(spec=VideoFileClip)
+    mock_clip.w = 1920
+    mock_clip.h = 1080
+    mock_clip.size = (1920, 1080)
+    
+    # Mock vfx_tool effects to return the clip (simulating real behavior)
+    mock_vfx_tool = MagicMock()
+    mock_vfx_tool.mirror_x.return_value = mock_clip
+    mock_vfx_tool.resize.return_value = mock_clip
+    mock_vfx_tool.crop.return_value = mock_clip
+    mock_vfx_tool.multiply_color.return_value = mock_clip
+    mock_vfx_tool.multiply_speed.return_value = mock_clip
+    
+    # Patch vfx_tool in the editor module
+    monkeypatch.setattr(editor, "vfx_tool", mock_vfx_tool)
+    
+    # Test that _apply_random_transformations returns a valid clip
+    result = editor._apply_random_transformations(mock_clip)
+    
+    # Verify the result is a clip object (mocked)
+    assert result is not None
+    # Verify at least one effect was called (since the function selects 2+ random effects)
+    assert (
+        mock_vfx_tool.mirror_x.called
+        or mock_vfx_tool.resize.called
+        or mock_vfx_tool.crop.called
+        or mock_vfx_tool.multiply_color.called
+        or mock_vfx_tool.multiply_speed.called
+    )

@@ -12,7 +12,7 @@ installed and Playwright/other browsers are set up when needed.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List
+from typing import List, cast, Any
 
 from fake_useragent import UserAgent
 from yt_dlp import YoutubeDL
@@ -91,19 +91,20 @@ def ingest(source_url: str) -> None:
     }
 
     try:
-        with YoutubeDL(listing_opts) as ydl:
+        with YoutubeDL(cast(Any, listing_opts)) as ydl:
             listing = ydl.extract_info(source_url, download=False)
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Failed to fetch listing for %s: %s", source_url, exc)
         return
 
-    entries = listing.get("entries") or []
-    if not entries and listing.get("id"):
+
+    entries = cast(list, listing.get("entries")) if listing.get("entries") is not None else []
+    if not entries and listing.get("id") is not None:
         entries = [listing]
 
     target_entry = None
     for entry in entries:
-        video_id = entry.get("id")
+        video_id = cast(str, entry.get("id")) if entry.get("id") is not None else None
         entry_url = entry.get("url") or entry.get("webpage_url")
         if not video_id or not entry_url:
             continue
@@ -129,13 +130,15 @@ def ingest(source_url: str) -> None:
     }
 
     try:
-        with YoutubeDL(download_opts) as ydl:
+        with YoutubeDL(cast(Any, download_opts)) as ydl:
             info = ydl.extract_info(target_url, download=True)
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Failed to download %s: %s", target_url, exc)
         return
 
-    video_id = info.get("id") or target_entry.get("id")
+    video_id = cast(str, info.get("id")) if info.get("id") is not None else (
+        cast(str, target_entry.get("id")) if target_entry.get("id") is not None else None
+    )
     if not video_id:
         logger.warning("Downloaded video missing ID, skipping inventory append")
         return

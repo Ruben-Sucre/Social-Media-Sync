@@ -12,12 +12,9 @@ from typing import Any, Dict, Optional, cast
 import random
 from datetime import datetime, timezone
 from uuid import uuid4
-
 import polars as pl
 from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.editor import vfx
-vfx_any: Any = vfx
-
+from moviepy import vfx
 from scripts.common import (
     BASE_DIR,
     PROCESSED_DIR,
@@ -27,6 +24,7 @@ from scripts.common import (
     logger,
 )
 
+vfx_tool: Any = vfx
 
 def _select_first_pending_row(df: pl.DataFrame) -> Optional[Dict[str, Any]]:
     """Return the first inventory row marked as pending."""
@@ -56,23 +54,23 @@ def _apply_random_transformations(clip: VideoFileClip) -> VideoFileClip:
         return getattr(c, "w", 0), getattr(c, "h", 0)
 
     def mirror(c: VideoFileClip) -> VideoFileClip:
-        return vfx_any.mirror_x(c)
+        return vfx_tool.mirror_x(c)
 
     def zoom(c: VideoFileClip) -> VideoFileClip:
         w, h = _size(c)
         margin_ratio = 0.05
         x_margin = int(w * margin_ratio)
         y_margin = int(h * margin_ratio)
-        cropped = vfx_any.crop(c, x1=x_margin, y1=y_margin, x2=w - x_margin, y2=h - y_margin)
-        return vfx_any.resize(cropped, width=w, height=h)
+        cropped = vfx_tool.crop(c, x1=x_margin, y1=y_margin, x2=w - x_margin, y2=h - y_margin)
+        return vfx_tool.resize(cropped, width=w, height=h)
 
     def color(c: VideoFileClip) -> VideoFileClip:
         factor = random.uniform(0.9, 1.1)
-        return vfx_any.multiply_color(c, factor=factor)
+        return vfx_tool.multiply_color(c, factor=factor)
 
     def speed(c: VideoFileClip) -> VideoFileClip:
         factor = random.uniform(1.01, 1.03)
-        return vfx_any.multiply_speed(c, factor=factor)
+        return vfx_tool.multiply_speed(c, factor=factor)
 
     transformations = [mirror, zoom, color, speed]
 
@@ -95,7 +93,7 @@ def process_pending() -> int:
         return 0
 
     path_local = row.get("path_local")
-    src = BASE_DIR / Path(path_local)
+    src = BASE_DIR / Path(cast(str, path_local))
     if not src.exists():
         logger.warning("Raw file not found for %s: %s", row.get("video_id"), src)
         return 0

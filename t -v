@@ -1,0 +1,4 @@
+Help on function __init__ in module moviepy.video.fx.MultiplySpeed:
+
+____iinniitt____(self, factor: float = None, final_duration: float = None) -> None
+    Initialize self.  See help(type(self)) for accurate signature.
