@@ -20,6 +20,8 @@ El proyecto está optimizado para `polars-lts-cpu` y maneja timestamps en UTC pa
 
 ## Instalación
 
+### Desarrollo Local
+
 1. Crear y activar un entorno virtual:
 
 ```bash
@@ -34,6 +36,22 @@ pip install -r requirements-dev.txt
 ```
 
 Nota: Asegúrate de tener `ffmpeg` disponible en la máquina si ejecutas MoviePy contra videos reales.
+
+### Despliegue en VM/Producción
+
+Para despliegue en un servidor Linux limpio (Ubuntu/Debian), consulta la [Guía de Despliegue](DEPLOYMENT.md) que incluye:
+
+1. **Provisión automática del sistema:**
+   ```bash
+   sudo bash provision.sh
+   ```
+   Instala Python 3, FFmpeg, Docker y Docker Compose.
+
+2. **Orquestación con n8n:**
+   ```bash
+   docker-compose up -d
+   ```
+   Levanta n8n para automatizar workflows de ingestión, edición y publicación.
 
 ## Uso
 
@@ -57,9 +75,6 @@ python -m scripts.publicador --mark-posted <VIDEO_ID>
 python -m scripts.publicador --mark-failed <VIDEO_ID>  # Marca videos fallidos durante la subida externa (n8n).
 ```
 
-## Tests
-
-
 ## Pruebas
 
 El proyecto cuenta con una suite de tests robusta que cubre los principales flujos de ingestión, edición y publicación de videos.
@@ -71,6 +86,21 @@ El proyecto cuenta con una suite de tests robusta que cubre los principales fluj
 - Los tests utilizan `pytest` y `pytest-mock` para simular dependencias externas como MoviePy y YoutubeDL, permitiendo ejecuciones rápidas y deterministas.
 - Se han implementado mocks y pruebas de excepciones para asegurar la robustez ante errores y casos límite.
 - La integración continua (CI) ejecuta automáticamente los tests en cada push o pull request usando GitHub Actions.
+
+## Limpieza y Mantenimiento
+
+Antes de desplegar en producción o hacer commits importantes, limpia archivos temporales y de prueba:
+
+```bash
+bash cleanup.sh
+```
+
+Este script elimina:
+- Videos de prueba en `videos/raw/` y `videos/processed/`
+- Logs antiguos en `logs/`
+- Cache de Python (`__pycache__`, archivos `.pyc`, `.pyo`)
+
+**Nota:** El inventario de datos (`data/*.parquet`) se conserva por defecto. Descomenta la línea correspondiente en el script si deseas limpiar también el inventario.
 
 ## Manejo de Errores
 

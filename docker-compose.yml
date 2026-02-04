@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: social-media-sync-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Configuración básica de n8n
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=changeme_in_production
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=America/Mexico_City
+      
+      # Configuración de ejecución
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      
+      # Configuración de recursos
+      - N8N_METRICS=false
+      - N8N_LOG_LEVEL=info
+      
+    volumes:
+      # Persistencia de datos de n8n (workflows, credenciales, ejecuciones)
+      - n8n_data:/home/node/.n8n
+      
+      # Montaje del proyecto para que n8n pueda ejecutar los scripts
+      - ./:/workspace/social-media-sync:ro
+      
+      # Montaje de videos y logs (lectura/escritura para workflows)
+      - ./videos:/workspace/social-media-sync/videos
+      - ./logs:/workspace/social-media-sync/logs
+      - ./data:/workspace/social-media-sync/data
+      
+    networks:
+      - n8n-network
+    
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  n8n_data:
+    driver: local
+    name: social-media-sync-n8n-data
+
+networks:
+  n8n-network:
+    driver: bridge
+    name: social-media-sync-network
