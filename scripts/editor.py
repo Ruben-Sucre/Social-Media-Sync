@@ -8,14 +8,15 @@ updates the inventory metadata accordingly.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 import random
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import polars as pl
 from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.video.fx import Crop, MirrorX, MultiplyColor, MultiplySpeed, Resize
+from moviepy.editor import vfx
+vfx_any: Any = vfx
 
 from scripts.common import (
     BASE_DIR,
@@ -55,23 +56,23 @@ def _apply_random_transformations(clip: VideoFileClip) -> VideoFileClip:
         return getattr(c, "w", 0), getattr(c, "h", 0)
 
     def mirror(c: VideoFileClip) -> VideoFileClip:
-        return c.fx(MirrorX())
+        return vfx_any.mirror_x(c)
 
     def zoom(c: VideoFileClip) -> VideoFileClip:
         w, h = _size(c)
         margin_ratio = 0.05
         x_margin = int(w * margin_ratio)
         y_margin = int(h * margin_ratio)
-        cropped = c.fx(Crop(x1=x_margin, y1=y_margin, x2=w - x_margin, y2=h - y_margin))
-        return cropped.fx(Resize(width=w, height=h))
+        cropped = vfx_any.crop(c, x1=x_margin, y1=y_margin, x2=w - x_margin, y2=h - y_margin)
+        return vfx_any.resize(cropped, width=w, height=h)
 
     def color(c: VideoFileClip) -> VideoFileClip:
         factor = random.uniform(0.9, 1.1)
-        return c.fx(MultiplyColor(factor=factor))
+        return vfx_any.multiply_color(c, factor=factor)
 
     def speed(c: VideoFileClip) -> VideoFileClip:
         factor = random.uniform(1.01, 1.03)
-        return c.fx(MultiplySpeed(factor=factor))
+        return vfx_any.multiply_speed(c, factor=factor)
 
     transformations = [mirror, zoom, color, speed]
 
@@ -110,8 +111,9 @@ def process_pending() -> int:
         )
 
         new_rel = str(dst.relative_to(BASE_DIR))
+        video_id = cast(str, row.get("video_id"))
         update_inventory_by_video_id(
-            row.get("video_id"),
+            video_id,
             {
                 "path_local": new_rel,
                 "status_fb": "ready",
