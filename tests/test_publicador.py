@@ -139,3 +139,31 @@ def test_mark_posted_updates_status_and_timestamp(temp_env_paths):
     row = inv.to_dicts()[0]
     assert row["status_fb"] == "posted"
     assert row["updated_at"] > before
+
+
+def test_mark_failed_updates_status_and_timestamp(temp_env_paths):
+    # Create a pending/ready row that will be marked as failed
+    processed_file = temp_env_paths["processed_dir"] / "to_fail.mp4"
+    processed_file.write_bytes(b"data")
+    path_local = processed_file.relative_to(temp_env_paths["base_dir"])
+
+    before = datetime.now(timezone.utc)
+    inventory_row = {
+        "video_id": "fail1",
+        "source_url": "https://example.com/fail1.mp4",
+        "title": "Fail1",
+        "duration": 15,
+        "path_local": str(path_local),
+        "status_fb": "ready",
+        "created_at": before,
+        "updated_at": before,
+    }
+    pl.DataFrame([inventory_row]).write_parquet(temp_env_paths["inventory_path"])
+
+    ok = publicador.cli_mark_failed("fail1")
+    assert ok is True
+
+    inv = common.read_inventory()
+    row = inv.to_dicts()[0]
+    assert row["status_fb"] == "failed"
+    assert row["updated_at"] > before

@@ -89,10 +89,25 @@ def cli_mark_posted(video_id: str) -> bool:
     return ok
 
 
+def cli_mark_failed(video_id: str) -> bool:
+    """Mark a video as failed in the inventory.
+
+    This is used by external orchestrators (n8n) when an upload fails so the
+    video doesn't block the queue. Uses FileLock via update_inventory_by_video_id.
+    """
+    ok = update_inventory_by_video_id(video_id, {"status_fb": "failed"})
+    if ok:
+        logger.info("Marked %s as failed", video_id)
+    else:
+        logger.warning("Could not find %s to mark as failed", video_id)
+    return ok
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--get-next", action="store_true", help="Print next processed video path")
     parser.add_argument("--mark-posted", metavar="VIDEO_ID", help="Mark a video as posted")
+    parser.add_argument("--mark-failed", metavar="VIDEO_ID", help="Mark a video as failed")
 
     args = parser.parse_args()
 
@@ -105,6 +120,10 @@ def main() -> None:
             print("")
     elif args.mark_posted:
         ok = cli_mark_posted(args.mark_posted)
+        if not ok:
+            raise SystemExit(2)
+    elif args.mark_failed:
+        ok = cli_mark_failed(args.mark_failed)
         if not ok:
             raise SystemExit(2)
     else:
