@@ -23,6 +23,7 @@ from scripts.common import (
     update_inventory_by_video_id,
     logger,
 )
+from scripts.exceptions import VideoProcessingError
 
 vfx_tool: Any = vfx
 
@@ -66,11 +67,11 @@ def _apply_random_transformations(clip: VideoFileClip) -> VideoFileClip:
 
     def color(c: VideoFileClip) -> VideoFileClip:
         factor = random.uniform(0.9, 1.1)
-        return vfx_tool.multiply_color(c, factor=factor)
+        return vfx_tool.colorx(c, factor)
 
     def speed(c: VideoFileClip) -> VideoFileClip:
         factor = random.uniform(1.01, 1.03)
-        return vfx_tool.multiply_speed(c, factor=factor)
+        return c.fx(vfx_tool.speedx, factor)
 
     transformations = [mirror, zoom, color, speed]
 
@@ -96,6 +97,7 @@ def process_pending() -> int:
     src = BASE_DIR / Path(cast(str, path_local))
     if not src.exists():
         logger.warning("Raw file not found for %s: %s", row.get("video_id"), src)
+        update_inventory_by_video_id(row.get("video_id"), {"status_fb": "failed"})
         return 0
 
     clip: Optional[VideoFileClip] = None
@@ -120,9 +122,10 @@ def process_pending() -> int:
 
         logger.info("Processed and transformed %s -> %s", src, dst)
         return 1
-    except Exception:
-        logger.exception("Failed to process video %s", row.get("video_id"))
-        return 0
+    except Exception as exc:
+        logger.exception("Failed to process video %s: %s", row.get("video_id"), exc)
+        update_inventory_by_video_id(row.get("video_id"), {"status_fb": "failed"})
+        raise VideoProcessingError(f"Failed to process video {row.get('video_id')}") from exc
     finally:
         if clip is not None:
             clip.close()

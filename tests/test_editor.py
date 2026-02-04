@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import polars as pl
 import pytest
+from scripts.exceptions import VideoProcessingError
 
 import scripts.common as common
 import scripts.editor as editor
@@ -74,6 +75,10 @@ def test_process_pending_transforms_single_clip(temp_env_paths, monkeypatch):
     clip_mock.size = (1920, 1080)
     clip_mock.write_videofile = MagicMock()
     clip_mock.close = MagicMock()
+    # Agregar métodos que devuelven el mismo clip
+    clip_mock.fx = MagicMock(return_value=clip_mock)
+    clip_mock.crop = MagicMock(return_value=clip_mock)
+    clip_mock.resize = MagicMock(return_value=clip_mock)
 
     # Mock vfx_tool functions to return the clip unchanged
     vfx_mock = MagicMock()
@@ -82,10 +87,13 @@ def test_process_pending_transforms_single_clip(temp_env_paths, monkeypatch):
     vfx_mock.resize = MagicMock(return_value=clip_mock)
     vfx_mock.multiply_color = MagicMock(return_value=clip_mock)
     vfx_mock.multiply_speed = MagicMock(return_value=clip_mock)
+    vfx_mock.speedx = MagicMock()  # Add speedx method
 
     video_file_clip = MagicMock(return_value=clip_mock)
     monkeypatch.setattr(editor, "VideoFileClip", video_file_clip)
     monkeypatch.setattr(editor, "vfx_tool", vfx_mock)
+    # Mock _apply_random_transformations to return the same clip
+    monkeypatch.setattr(editor, "_apply_random_transformations", lambda c: c)
 
     processed = editor.process_pending()
 
@@ -164,15 +172,18 @@ def test_process_pending_closes_on_error(temp_env_paths, monkeypatch):
     monkeypatch.setattr(editor, "VideoFileClip", video_file_clip)
     monkeypatch.setattr(editor, "_apply_random_transformations", lambda c: c)
 
-    processed = editor.process_pending()
-
-    assert processed == 0
+    # El error debe ser capturado y manejado, lanzando VideoProcessingError
+    with pytest.raises(VideoProcessingError):
+        editor.process_pending()
+    
+    # Verificar que el clip se cerró
     video_file_clip.assert_called_once_with(str(raw_file))
     clip_mock.write_videofile.assert_called_once()
     clip_mock.close.assert_called_once()
 
     updated_rows = common.read_inventory().to_dicts()
-    assert updated_rows[0]["status_fb"] == "pending"
+    # El estado debe cambiar a 'failed' después del error
+    assert updated_rows[0]["status_fb"] == "failed"
 
 
 def test_vfx_tool_effects_return_valid_clips(monkeypatch):
@@ -184,6 +195,7 @@ def test_vfx_tool_effects_return_valid_clips(monkeypatch):
     mock_clip.w = 1920
     mock_clip.h = 1080
     mock_clip.size = (1920, 1080)
+    mock_clip.fx = MagicMock(return_value=mock_clip)  # Add fx method
     
     # Mock vfx_tool effects to return the clip (simulating real behavior)
     mock_vfx_tool = MagicMock()
@@ -192,6 +204,7 @@ def test_vfx_tool_effects_return_valid_clips(monkeypatch):
     mock_vfx_tool.crop.return_value = mock_clip
     mock_vfx_tool.multiply_color.return_value = mock_clip
     mock_vfx_tool.multiply_speed.return_value = mock_clip
+    mock_vfx_tool.speedx = MagicMock()  # Add speedx method
     
     # Patch vfx_tool in the editor module
     monkeypatch.setattr(editor, "vfx_tool", mock_vfx_tool)
@@ -208,4 +221,77 @@ def test_vfx_tool_effects_return_valid_clips(monkeypatch):
         or mock_vfx_tool.crop.called
         or mock_vfx_tool.multiply_color.called
         or mock_vfx_tool.multiply_speed.called
+        or mock_clip.fx.called
     )
+
+
+def test_process_pending_success(monkeypatch, temp_env_paths):
+    """Test successful video processing."""
+    mock_clip = MagicMock()
+    mock_clip.write_videofile.return_value = None
+    mock_clip.close.return_value = None
+    
+    # Create a dummy video file
+    test_video = temp_env_paths["raw_dir"] / "test.mp4"
+    test_video.write_text("dummy")
+    
+    # Patch VideoFileClip in the editor module, not in moviepy
+    with patch("scripts.editor.VideoFileClip", return_value=mock_clip), \
+         patch("scripts.editor._apply_random_transformations", return_value=mock_clip), \
+         patch("scripts.editor.read_inventory") as mock_read_inventory, \
+         patch("scripts.editor.update_inventory_by_video_id") as mock_update_inventory:
+        
+        # Return a Polars DataFrame instead of a list
+        import polars as pl
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        mock_read_inventory.return_value = pl.DataFrame([
+            {
+                "status_fb": "pending", 
+                "path_local": str(test_video.relative_to(temp_env_paths["base_dir"])), 
+                "video_id": "test_id",
+                "source_url": "http://example.com",
+                "title": "Test",
+                "duration": 10,
+                "created_at": now,
+                "updated_at": now
+            }
+        ])
+        
+        result = editor.process_pending()
+        assert result == 1
+        mock_update_inventory.assert_called_once()
+
+
+def test_process_pending_no_videos(temp_env_paths):
+    """Test processing when no videos are pending."""
+    with patch("scripts.editor.read_inventory") as mock_read_inventory:
+        # Return an empty Polars DataFrame
+        import polars as pl
+        mock_read_inventory.return_value = pl.DataFrame()
+        result = editor.process_pending()
+        assert result == 0
+
+
+def test_process_pending_file_not_found(temp_env_paths):
+    """Test processing when file is not found."""
+    with patch("scripts.editor.read_inventory") as mock_read_inventory, \
+         patch("scripts.editor.update_inventory_by_video_id") as mock_update_inventory:
+        # Return a Polars DataFrame
+        import polars as pl
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        mock_read_inventory.return_value = pl.DataFrame([
+            {
+                "status_fb": "pending", 
+                "path_local": "videos/raw/missing.mp4", 
+                "video_id": "test_id",
+                "source_url": "http://example.com",
+                "title": "Test",
+                "duration": 10,
+                "created_at": now,
+                "updated_at": now
+            }
+        ])
+        result = editor.process_pending()
+        assert result == 0

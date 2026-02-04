@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import List, cast, Any
+from time import sleep
+from scripts.exceptions import DownloadError, InventoryUpdateError
 
 from fake_useragent import UserAgent
 from yt_dlp import YoutubeDL
@@ -72,7 +74,7 @@ def _already_exists(video_id: str) -> bool:
     return exists.height > 0
 
 
-def ingest(source_url: str) -> None:
+def ingest(source_url: str, retries: int = 3) -> None:
     """Single-shot ingestion: download at most one new video for `source_url`."""
     if not source_url:
         logger.warning("No source_url provided to ingest()")
@@ -93,10 +95,9 @@ def ingest(source_url: str) -> None:
     try:
         with YoutubeDL(cast(Any, listing_opts)) as ydl:
             listing = ydl.extract_info(source_url, download=False)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:
         logger.exception("Failed to fetch listing for %s: %s", source_url, exc)
-        return
-
+        raise DownloadError(f"Failed to fetch listing for {source_url}") from exc
 
     entries = cast(list, listing.get("entries")) if listing.get("entries") is not None else []
     if not entries and listing.get("id") is not None:
@@ -129,12 +130,20 @@ def ingest(source_url: str) -> None:
         "user_agent": user_agent,
     }
 
-    try:
-        with YoutubeDL(cast(Any, download_opts)) as ydl:
-            info = ydl.extract_info(target_url, download=True)
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.exception("Failed to download %s: %s", target_url, exc)
-        return
+    attempt = 0
+    while attempt < retries:
+        try:
+            with YoutubeDL(cast(Any, download_opts)) as ydl:
+                info = ydl.extract_info(target_url, download=True)
+            break  # Exit loop on success
+        except Exception as exc:
+            attempt += 1
+            logger.warning("Attempt %d/%d failed to download %s: %s", attempt, retries, target_url, exc)
+            if attempt >= retries:
+                logger.error("All download attempts failed for %s", target_url)
+                _update_inventory_status(video_id, "failed")
+                raise DownloadError(f"Failed to download {target_url} after {retries} attempts") from exc
+            sleep(2)  # Wait before retrying
 
     video_id = cast(str, info.get("id")) if info.get("id") is not None else (
         cast(str, target_entry.get("id")) if target_entry.get("id") is not None else None
@@ -159,9 +168,21 @@ def ingest(source_url: str) -> None:
         "updated_at": datetime.now(timezone.utc),
     }
 
-    _append_to_inventory([row])
+    try:
+        _append_to_inventory([row])
+    except Exception as exc:
+        logger.exception("Failed to update inventory for %s: %s", video_id, exc)
+        raise InventoryUpdateError(f"Failed to update inventory for {video_id}") from exc
+
     logger.info("Downloaded %s", video_id)
 
 
-if __name__ == "__main__":
-    raise SystemExit("Import and call `ingest()` from your orchestrator or tests")
+def _update_inventory_status(video_id: str, status: str) -> None:
+    """Update the status of a video in the inventory."""
+    try:
+        lf = _read_inventory_lazy()
+        lf = lf.with_columns(pl.when(pl.col("video_id") == video_id).then(status).otherwise(pl.col("status_fb")))
+        lf.write_parquet(BASE_DIR / "data/inventario_videos.parquet")
+    except Exception as exc:
+        logger.exception("Failed to update status for %s: %s", video_id, exc)
+        raise InventoryUpdateError(f"Failed to update status for {video_id}") from exc
