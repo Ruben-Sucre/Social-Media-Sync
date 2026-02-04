@@ -10,15 +10,74 @@ from __future__ import annotations
 
 import argparse
 from typing import Optional
+from pathlib import Path
 
-from scripts.common import find_next_processed_pending, update_inventory_by_video_id, logger
+from filelock import FileLock
+from datetime import datetime, timezone
+
+from scripts.common import (
+    BASE_DIR,
+    INVENTORY_PATH,
+    LOCK_PATH,
+    update_inventory_by_video_id,
+    logger,
+)
+import polars as pl
 
 
 def cli_get_next() -> Optional[str]:
-    nxt = find_next_processed_pending()
-    if not nxt:
+    """Return the next processed video path that exists on disk.
+
+    Scans the inventory for items with `status_fb == 'pending'` and
+    `path_local` pointing at `processed/`. For each candidate we verify the
+    file exists on disk. If a processed file is missing, the entry is marked
+    as `failed` and the search continues. Uses `FileLock` to avoid races with
+    concurrent writers.
+    """
+    lock = FileLock(str(LOCK_PATH))
+    to_mark_failed: list[str] = []
+    try:
+        with lock:
+            if not INVENTORY_PATH.exists():
+                return None
+            df = pl.read_parquet(INVENTORY_PATH)
+            found_path: Optional[str] = None
+            for row in df.to_dicts():
+                if row.get("status_fb") != "pending":
+                    continue
+                path_local = row.get("path_local") or ""
+                if "processed" not in path_local:
+                    continue
+                candidate = BASE_DIR / Path(path_local)
+                if candidate.exists():
+                    found_path = path_local
+                    # don't return yet; allow marking of earlier missing files
+                    break
+                # mark as failed in the in-memory DF (we're holding the lock)
+                logger.error("Processed file missing for %s: %s", row.get("video_id"), candidate)
+                to_mark_failed.append(row.get("video_id"))
+
+            if to_mark_failed:
+                # update status_fb and updated_at for the missing entries
+                exprs = [
+                    pl.when(pl.col("video_id").is_in(to_mark_failed))
+                    .then(pl.lit("failed"))
+                    .otherwise(pl.col("status_fb"))
+                    .alias("status_fb"),
+                    pl.when(pl.col("video_id").is_in(to_mark_failed))
+                    .then(pl.lit(datetime.now(timezone.utc)))
+                    .otherwise(pl.col("updated_at"))
+                    .alias("updated_at"),
+                ]
+                df = df.with_columns(exprs)
+                df.write_parquet(INVENTORY_PATH)
+            if found_path:
+                return found_path
+    except Exception:
+        logger.exception("Failed scanning inventory for next processed video")
         return None
-    return nxt["path_local"]
+
+    return None
 
 
 def cli_mark_posted(video_id: str) -> bool:
