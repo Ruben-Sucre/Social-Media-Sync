@@ -19,12 +19,17 @@ node_modules/
 
 # Data artifacts
 data/*.parquet
+data/*.lock
 
 # Videos - ignore all video blobs (raw, processed, etc.)
 videos/**
 
 # Logs
 logs/**
+
+# Pytest cache
+.pytest_cache/
+*.pytest_cache
 
 # OS noise
 .DS_Store

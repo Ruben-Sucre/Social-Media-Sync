@@ -1,67 +1,77 @@
-# Social-Media-Sync (TikTok -> FB pipeline)
+# Social-Media-Sync
 
-Estructura inicial del pipeline y pasos para implementarlo incrementalmente.
+Sistema de sincronización y edición aleatoria de video (ingestión → edición → publicación).
 
-## Estructura del proyecto
+## Descripción
 
-- data/
-  - inventario_videos.parquet  # Base de verdad (inventory)
-- videos/
-  - raw/                       # Descargas crudas
-  - processed/                 # Editados / listos para subir
-- logs/
-  - pipeline.log               # Registros del pipeline
-- scripts/
-  - common.py                  # Configuración y utilidades comunes
-  - ingestor.py                # Descarga e ingestión (yt-dlp)
-  - editor.py                  # Hook que prepara archivos para publicación
-  - publicador.py              # CLI para integrarlo con n8n
-- requirements.txt             # Dependencias básicas
+Social-Media-Sync es un conjunto de utilidades y scripts para:
+- descubrir/ingestar videos usando `yt-dlp` y registrar metadatos en un inventario Parquet,
+- aplicar transformaciones aleatorias y ligeras (zoom, espejo, color, velocidad) para generar contenido único con MoviePy,
+- exponer utilidades para integración con orquestadores (por ejemplo `n8n`) para publicar y marcar videos.
+
+El proyecto está optimizado para `polars-lts-cpu` y maneja timestamps en UTC para compatibilidad y reproducibilidad.
+
+## Tecnologías
+
+- polars-lts-cpu (manipulación rápida de DataFrames y Parquet)
+- MoviePy 2.x (edición de video)
+- yt-dlp (descarga de video)
+- filelock (bloqueo simple para concurrencia) 
+
+## Instalación
+
+1. Crear y activar un entorno virtual:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+```
+
+2. Instalar dependencias de desarrollo (incluye dependencias de producción):
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Nota: Asegúrate de tener `ffmpeg` disponible en la máquina si ejecutas MoviePy contra videos reales.
+
+## Uso
+
+- Ingestor: descargar e ingestar un video (agrega `status_fb = 'pending'`):
+
+```bash
+python -m scripts.ingestor "<source_url>"
+```
+
+- Editor: procesa el primer video `pending` y lo transforma/ejecuta export:
+
+```bash
+python -m scripts.editor
+```
+
+- Publicador (CLI): obtener el siguiente procesado o marcar un video como publicado:
+
+```bash
+python -m scripts.publicador --get-next
+python -m scripts.publicador --mark-posted <VIDEO_ID>
+```
+
+## Tests
+
+Ejecuta la suite de tests con:
+
+```bash
+pytest -v tests
+```
+
+Los tests usan `pytest` y `pytest-mock` y simulan MoviePy para ejecuciones rápidas y deterministas.
+
+## Notas de diseño
+
+- El inventario se mantiene en `data/inventario_videos.parquet` y es el registro de verdad.
+- Fechas y timestamps se manejan en UTC y las columnas `created_at` y `updated_at` tienen zona horaria explícita (`UTC`).
+- Se usa `filelock` para evitar condiciones de carrera cuando varios procesos actualizan el inventario.
 
 ---
 
-## Plan de trabajo (paso a paso) ✅
-
-1. Configuración común (ya implementado)
-   - `scripts/common.py` expone rutas relativas (portable), manejo básico de
-     inventario y un logger central que escribe en consola y `logs/pipeline.log`.
-
-2. Ingestor (mínimo viable)
-   - `scripts/ingestor.py` contiene stubs para `obtener_tendencias` y realiza
-     descargas con `yt-dlp` en `videos/raw/`. Registra metadatos en el
-     inventario con `status_fb = 'pending'`.
-   - Usar `scan_parquet` (lazy) para verificaciones de duplicados antes de
-     agregar entradas.
-
-3. Editor / Hook (mínimo viable)
-   - `scripts/editor.py` busca ítems `pending` que tienen archivos en `videos/raw/`,
-     los mueve a `videos/processed/` y actualiza `path_local` en el inventario.
-   - `TODO` marcado donde irá la lógica de MoviePy (recorte, reescalado, watermark).
-
-4. Publicador
-   - `scripts/publicador.py` ofrece CLI: `--get-next` (imprime la ruta) y
-     `--mark-posted VIDEO_ID` (marca `status_fb = 'posted'`).
-
-5. Archivos de soporte
-   - `.gitignore` actualizado para excluir blobs grandes (`videos/**`),
-     `data/*.parquet` y `logs/**` manteniendo `.gitkeep` para estructura.
-   - `requirements.txt` mínimo con `polars` y `yt-dlp` (nota sobre `pathlib`).
-
----
-
-## Próximos pasos sugeridos (priorizados)
-
-1. Escribir tests unitarios para `common._append_to_inventory` y `find_next_processed_pending`.
-2. Implementar la recolección real de URLs (Playwright) en `ingestor.obtener_tendencias`.
-3. Añadir la edición con MoviePy en `editor.process_pending` y tests que verifiquen
-   la duración / resolución.
-4. Crear un flujo n8n que use `publicador --get-next` y `publicador --mark-posted`.
-
----
-
-Si quieres, puedo seguir y:
-- Añadir tests y GitHub Actions para CI ✅
-- Implementar la integración Playwright + descargar lots de URLs ✅
-- Añadir una pequeña CLI al `ingestor` para ejecutar por hashtag/playlist
-
-Dime qué quieres priorizar y lo vamos avanzando por sprints pequeños.
+Para más detalles o integraciones (Playwright, pipelines CI/CD, despliegue), dime qué priorizar y lo abordamos por sprints.

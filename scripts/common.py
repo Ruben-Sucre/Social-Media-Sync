@@ -152,7 +152,11 @@ def _append_to_inventory(rows: Iterable[Dict]) -> None:
 
 
 def update_inventory_by_video_id(video_id: str, updates: Dict) -> bool:
-    """Update a row by video_id. Returns True if updated, False otherwise."""
+    """Update a row identified by `video_id`.
+
+    Returns True if a row was updated. The function applies `updates` to any
+    matching row and automatically sets `updated_at` to the current UTC time.
+    """
     lock = FileLock(str(LOCK_PATH))
     try:
         with lock:

@@ -34,17 +34,21 @@ DEFAULT_USER_AGENT = (
 
 
 def obtener_tendencias(source: str | None = None) -> List[str]:
-    """Stub: return a list of video URLs to ingest.
+    """Return a list of video URLs to ingest.
 
-    Replace this with real scraping / Playwright logic.
+    This is a lightweight stub used by tests and early development. Replace
+    with real scraping or Playwright-driven logic when integrating full
+    discovery pipelines.
     """
-    # TODO: implement real trend extraction. For now accept `source` as a single URL
     return [source] if source else []
 
 
 def procesar_hashtag(hashtag: str) -> List[str]:
-    """Stub: return a list of video URLs for a hashtag."""
-    # TODO: use Playwright to expand and collect many URLs
+    """Return video URLs for a given hashtag.
+
+    Currently a stub that returns an empty list. Replace with Playwright or
+    other discovery mechanisms to expand hashtags into candidate videos.
+    """
     return []
 
 
