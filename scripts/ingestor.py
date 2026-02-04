@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import List, cast, Any
-from time import sleep
 from scripts.exceptions import DownloadError, InventoryUpdateError
+from scripts.utils import random_wait, retry
 
 from fake_useragent import UserAgent
 from yt_dlp import YoutubeDL
@@ -90,9 +90,14 @@ def ingest(source_url: str, retries: int = 3) -> None:
         "skip_download": True,
         "noplaylist": True,
         "user_agent": user_agent,
+        # human-like ytdlp sleep hints
+        "sleep_interval": 3,
+        "max_sleep_interval": 10,
+        "sleep_subtitles": 1,
     }
 
     try:
+        random_wait(1, 6)
         with YoutubeDL(cast(Any, listing_opts)) as ydl:
             listing = ydl.extract_info(source_url, download=False)
     except Exception as exc:
@@ -128,22 +133,26 @@ def ingest(source_url: str, retries: int = 3) -> None:
         "format": "bestvideo+bestaudio/best",
         "noplaylist": True,
         "user_agent": user_agent,
+        # hints for yt-dlp to act more human-like
+        "sleep_interval": 3,
+        "max_sleep_interval": 10,
+        "sleep_subtitles": 1,
     }
+    # ensure we have a video_id for status updates
+    video_id = cast(str, target_entry.get("id")) if target_entry.get("id") is not None else None
 
-    attempt = 0
-    while attempt < retries:
-        try:
-            with YoutubeDL(cast(Any, download_opts)) as ydl:
-                info = ydl.extract_info(target_url, download=True)
-            break  # Exit loop on success
-        except Exception as exc:
-            attempt += 1
-            logger.warning("Attempt %d/%d failed to download %s: %s", attempt, retries, target_url, exc)
-            if attempt >= retries:
-                logger.error("All download attempts failed for %s", target_url)
-                _update_inventory_status(video_id, "failed")
-                raise DownloadError(f"Failed to download {target_url} after {retries} attempts") from exc
-            sleep(2)  # Wait before retrying
+    def _do_download():
+        with YoutubeDL(cast(Any, download_opts)) as ydl:
+            return ydl.extract_info(target_url, download=True)
+
+    try:
+        random_wait(1, 6)
+        # decorate the small helper with retry behavior
+        info = retry(retries=retries, base=5.0, factor=3.0, max_wait=90.0, jitter=True)(_do_download)()
+    except Exception as exc:
+        logger.error("Download failed for %s after retries: %s", target_url, exc)
+        _update_inventory_status(video_id, "failed")
+        raise DownloadError(f"Failed to download {target_url} after {retries} attempts") from exc
 
     video_id = cast(str, info.get("id")) if info.get("id") is not None else (
         cast(str, target_entry.get("id")) if target_entry.get("id") is not None else None
