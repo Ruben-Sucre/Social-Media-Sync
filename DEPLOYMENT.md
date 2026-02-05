@@ -68,7 +68,12 @@ N8N_BASIC_AUTH_PASSWORD=tu-password-seguro
 
 ### 5. Levantar n8n
 
+Este repositorio no incluye `docker-compose.yml` por seguridad. Copia `docker-compose.yml.example` a `docker-compose.yml` en la raíz y configura tus secretos/variables en un archivo `.env` antes de levantar los servicios.
+
 ```bash
+# Copiar plantilla a archivo activo (una sola vez)
+cp docker-compose.yml.example docker-compose.yml
+# Crear/editar .env y establecer N8N_BASIC_AUTH_PASSWORD, etc.
 # Iniciar n8n en modo daemon
 docker-compose up -d
 
@@ -79,8 +84,8 @@ docker-compose logs -f n8n
 
 **Acceso a n8n:**
 - URL: `http://<vm-ip>:5678`
-- Usuario: `admin` (o el configurado en `.env`)
-- Password: `changeme_in_production` (o el configurado en `.env`)
+- Usuario: valor de `N8N_BASIC_AUTH_USER` en `.env`
+- Password: valor de `N8N_BASIC_AUTH_PASSWORD` en `.env`
 
 ### 6. Configurar Workflows en n8n
 
@@ -109,6 +114,30 @@ Execute Command Node (Editor):
 Execute Command Node (Publicador):
   Command: /workspace/social-media-sync/venv/bin/python
   Arguments: /workspace/social-media-sync/scripts/publicador.py
+```
+
+### Arranque automático con systemd
+
+Para que la pila de n8n se levante automáticamente al arrancar la VM, crea el archivo de unidad systemd y actívalo. He incluido `systemd/social-media-sync.service` en el repositorio; en la VM copia y habilita el servicio con estos comandos:
+
+```bash
+sudo cp /workspaces/Social-Media-Sync/systemd/social-media-sync.service /etc/systemd/system/social-media-sync.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now social-media-sync.service
+```
+
+Comprobar status y seguir logs:
+
+```bash
+sudo systemctl status social-media-sync.service
+sudo journalctl -u social-media-sync.service -f
+```
+
+El servicio depende de `docker.service`, arranca la pila desde `/workspaces/Social-Media-Sync` y ejecuta `docker compose up -d` al inicio. Antes de habilitar el servicio, asegura que el archivo `.env` existe en la raíz del proyecto —puedes crear uno a partir del ejemplo incluido:
+
+```bash
+cp /workspaces/Social-Media-Sync/.env.example /workspaces/Social-Media-Sync/.env
+# Edita /workspaces/Social-Media-Sync/.env para establecer una contraseña segura en N8N_BASIC_AUTH_PASSWORD
 ```
 
 ## 🔧 Troubleshooting
