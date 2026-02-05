@@ -48,9 +48,17 @@ Para despliegue en un servidor Linux limpio (Ubuntu/Debian), consulta la [Guía 
    Instala Python 3, FFmpeg, Docker y Docker Compose.
 
 2. **Orquestación con n8n:**
+
+   Este repositorio no incluye `docker-compose.yml` por seguridad. Copia `docker-compose.yml.example` a `docker-compose.yml` y crea un archivo `.env` con las variables necesarias antes de ejecutar `docker-compose up -d`.
+
+   Ejemplo:
+
    ```bash
+   cp docker-compose.yml.example docker-compose.yml
+   # editar .env según necesidades
    docker-compose up -d
    ```
+
    Levanta n8n para automatizar workflows de ingestión, edición y publicación.
 
 ## Uso

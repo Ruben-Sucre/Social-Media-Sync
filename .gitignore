@@ -38,5 +38,20 @@ Thumbs.db
 # Keep placeholder files
 !*/.gitkeep
 
-# Include all .json files
-!*.json
+# Policy for JSON files: ignore by default, keep examples/tests/workflows
+*.json
+!n8n-workflows/*.json
+!tests/**/*.json
+!**/*example*.json
+!**/*sample*.json
+!**/*test*.json
+!**/*fixture*.json
+
+# Ignore VS Code local settings
+.vscode/
+
+# Ignore Docker Compose local files; keep `docker-compose.yml.example` if present
+docker-compose.yml
+docker-compose.override.yml
+docker-compose.*.yml
+docker-compose*.yaml
