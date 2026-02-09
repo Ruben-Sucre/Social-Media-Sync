@@ -1,0 +1,178 @@
+{
+  "name": "Ingestor Hashtag TikTok - Robust",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "hashtag_url",
+              "value": "https://www.tiktok.com/tag/programacion"
+            },
+            {
+              "name": "max_videos",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Set Hashtag Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "mode": "runOnceForAllItems",
+        "pythonCode": "import sys\nimport os\nimport json\nfrom datetime import datetime, timezone\n\n# Add the workspace directory to Python path\nsys.path.insert(0, '/workspace/social-media-sync')\n\nfrom scripts.ingestor import ingest_from_hashtag\n\ntry:\n    # Get configuration from previous node\n    if _items and len(_items) > 0:\n        hashtag_url = _items[0].get('hashtag_url', 'https://www.tiktok.com/tag/programacion')\n        max_videos = int(_items[0].get('max_videos', '1'))\n    else:\n        hashtag_url = 'https://www.tiktok.com/tag/programacion'\n        max_videos = 1\n    \n    start_time = datetime.now(timezone.utc)\n    print(json.dumps({\n        'level': 'INFO',\n        'event': 'ingest_start',\n        'hashtag_url': hashtag_url,\n        'max_videos': max_videos,\n        'timestamp': start_time.isoformat(),\n    }))\n    \n    # Execute hashtag ingestor with improved error handling\n    success_count = ingest_from_hashtag(hashtag_url, max_videos=max_videos)\n    \n    end_time = datetime.now(timezone.utc)\n    duration = (end_time - start_time).total_seconds()\n    \n    result = {\n        'status': 'success' if success_count > 0 else 'partial',\n        'message': f'Successfully ingested {success_count} of {max_videos} videos from {hashtag_url}',\n        'hashtag_url': hashtag_url,\n        'videos_ingested': success_count,\n        'max_videos': max_videos,\n        'success_rate': round((success_count / max_videos * 100), 2) if max_videos > 0 else 0,\n        'duration_seconds': round(duration, 2),\n        'start_time': start_time.isoformat(),\n        'end_time': end_time.isoformat(),\n    }\n    \n    print(json.dumps({\n        'level': 'INFO',\n        'event': 'ingest_complete',\n        **result\n    }))\n    \n    return [result]\n    \nexcept Exception as e:\n    end_time = datetime.now(timezone.utc)\n    error_result = {\n        'status': 'error',\n        'message': str(e),\n        'error_type': type(e).__name__,\n        'hashtag_url': hashtag_url if 'hashtag_url' in locals() else 'unknown',\n        'timestamp': end_time.isoformat(),\n    }\n    \n    print(json.dumps({\n        'level': 'ERROR',\n        'event': 'ingest_failed',\n        **error_result\n    }))\n    \n    import traceback\n    traceback.print_exc()\n    \n    return [error_result]"
+      },
+      "id": "3",
+      "name": "Run Hashtag Ingestor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "error"
+            }
+          ]
+        }
+      },
+      "id": "5",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "mode": "runOnceForAllItems",
+        "pythonCode": "import sys\nimport os\nimport polars as pl\nimport json\nfrom pathlib import Path\n\n# Add the workspace directory to Python path\nsys.path.insert(0, '/workspace/social-media-sync')\n\nINVENTARIO_PATH = Path('/workspace/social-media-sync/data/inventario_videos.parquet')\n\nprint(json.dumps({'level': 'INFO', 'event': 'inventory_check', 'path': str(INVENTARIO_PATH)}))\n\nif not INVENTARIO_PATH.exists():\n    result = {\"exists\": False, \"total_videos\": 0, \"status_counts\": {}, \"last_videos\": []}\n    print(json.dumps({'level': 'WARNING', 'event': 'inventory_not_found'}))\n    return [result]\n\ntry:\n    df = pl.read_parquet(str(INVENTARIO_PATH))\n    \n    # Status counts\n    status_counts = df[\"status_fb\"].value_counts().to_dict(as_series=False)\n    counts_dict = {k: v for k, v in zip(status_counts[\"status_fb\"], status_counts[\"count\"])}\n    \n    # Last 5 videos\n    last_videos = df.tail(5).to_dicts() if not df.is_empty() else []\n    \n    # Convert datetimes to string\n    for video in last_videos:\n        for k, v in video.items():\n            if hasattr(v, 'isoformat'):\n                video[k] = v.isoformat()\n    \n    result = {\n        \"exists\": True,\n        \"total_videos\": len(df),\n        \"status_counts\": counts_dict,\n        \"last_videos\": last_videos\n    }\n    \n    print(json.dumps({'level': 'INFO', 'event': 'inventory_loaded', 'total_videos': len(df)}))\n    return [result]\n    \nexcept Exception as e:\n    error_result = {\"error\": str(e), \"error_type\": type(e).__name__}\n    print(json.dumps({'level': 'ERROR', 'event': 'inventory_error', 'error': str(e)}))\n    import traceback\n    traceback.print_exc()\n    return [error_result]"
+      },
+      "id": "4",
+      "name": "Verify Inventory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "alert_type",
+              "value": "error"
+            },
+            {
+              "name": "alert_message",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "hashtag_url",
+              "value": "={{ $json.hashtag_url }}"
+            },
+            {
+              "name": "error_type",
+              "value": "={{ $json.error_type }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6",
+      "name": "Format Error Alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1040, 400]
+    },
+    {
+      "parameters": {
+        "content": "## Error Alert 🚨\n\n**Hashtag Ingest Failed**\n\n- **URL**: {{ $json.hashtag_url }}\n- **Error**: {{ $json.alert_message }}\n- **Type**: {{ $json.error_type }}\n- **Time**: {{ $now.toISO() }}\n\n---\n\n*Configure webhook notifications (Discord/Slack/Telegram) for production alerts*",
+        "height": 323.7894736842105,
+        "width": 321.05263157894734
+      },
+      "id": "7",
+      "name": "Error Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1020, 540]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Hashtag Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Hashtag Config": {
+      "main": [
+        [
+          {
+            "node": "Run Hashtag Ingestor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Hashtag Ingestor": {
+      "main": [
+        [
+          {
+            "node": "Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify Inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "America/New_York",
+    "executionOrder": "v1"
+  },
+  "staticData": {}
+}
