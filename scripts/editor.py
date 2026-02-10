@@ -55,7 +55,8 @@ def _apply_random_transformations(clip: VideoFileClip) -> VideoFileClip:
         return getattr(c, "w", 0), getattr(c, "h", 0)
 
     def mirror(c: VideoFileClip) -> VideoFileClip:
-        return vfx_tool.MirrorX(c)
+        # Use with_effects for moviepy 2.x compatibility
+        return cast(VideoFileClip, c.with_effects([vfx.MirrorX()]))
 
     def zoom(c: VideoFileClip) -> VideoFileClip:
         w, h = _size(c)
@@ -66,12 +67,21 @@ def _apply_random_transformations(clip: VideoFileClip) -> VideoFileClip:
         return cast(VideoFileClip, cropped)
 
     def color(c: VideoFileClip) -> VideoFileClip:
-        logger.warning("Color transformation is not supported in the current version of moviepy. Skipping.")
-        return c
+        # Brightness/contrast adjustment - skip if not available
+        try:
+            return cast(VideoFileClip, c.with_effects([vfx.MultiplyColor(factor=random.uniform(0.95, 1.05))]))
+        except Exception:
+            logger.warning("Color transformation skipped.")
+            return c
 
     def speed(c: VideoFileClip) -> VideoFileClip:
-        logger.warning("Speed transformation is not supported in the current version of moviepy. Skipping.")
-        return c
+        # Slight speed adjustment
+        try:
+            factor = random.uniform(0.95, 1.05)
+            return cast(VideoFileClip, c.with_effects([vfx.MultiplySpeed(factor=factor)]))
+        except Exception:
+            logger.warning("Speed transformation skipped.")
+            return c
 
     transformations = [mirror, zoom, color, speed]
 
