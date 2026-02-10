@@ -35,6 +35,10 @@ logs/**
 .DS_Store
 Thumbs.db
 
+# n8n cache and data (generated at runtime)
+n8n/
+.n8n/
+
 # Keep placeholder files
 !*/.gitkeep
 
