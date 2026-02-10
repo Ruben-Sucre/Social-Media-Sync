@@ -212,3 +212,74 @@ def find_next_processed_pending() -> Dict | None:
     if res.height == 0:
         return None
     return {"video_id": res[0, "video_id"], "path_local": res[0, "path_local"]}
+
+
+def cleanup_old_ready_videos(hours: int = 48) -> int:
+    """Delete videos with status 'ready' that are older than specified hours.
+    
+    Args:
+        hours: Number of hours after which ready videos should be deleted (default: 48)
+        
+    Returns:
+        Number of videos deleted
+    """
+    from datetime import timedelta
+    
+    lock = FileLock(str(LOCK_PATH))
+    deleted_count = 0
+    
+    try:
+        with lock:
+            if not INVENTORY_PATH.exists():
+                return 0
+            
+            df = pl.read_parquet(INVENTORY_PATH)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+            
+            # Find ready videos older than cutoff
+            old_ready = df.filter(
+                (pl.col("status_fb") == "ready") &
+                (pl.col("updated_at") < cutoff_time)
+            )
+            
+            if old_ready.is_empty():
+                logger.info("No old ready videos to cleanup (cutoff: %dh)", hours)
+                return 0
+            
+            # Delete the video files
+            for row in old_ready.to_dicts():
+                video_path = BASE_DIR / row.get("path_local", "")
+                video_id = row.get("video_id", "unknown")
+                
+                if video_path.exists():
+                    try:
+                        video_path.unlink()
+                        logger.info("Deleted old video file: %s", video_path)
+                        deleted_count += 1
+                    except Exception as e:
+                        logger.error("Failed to delete %s: %s", video_path, e)
+                else:
+                    logger.warning("Video file not found: %s", video_path)
+                    deleted_count += 1  # Count as deleted since it's not there
+            
+            # Update status to 'expired' for these videos
+            video_ids = old_ready["video_id"].to_list()
+            df = df.with_columns(
+                pl.when(pl.col("video_id").is_in(video_ids))
+                .then(pl.lit("expired"))
+                .otherwise(pl.col("status_fb"))
+                .alias("status_fb"),
+                pl.when(pl.col("video_id").is_in(video_ids))
+                .then(pl.lit(datetime.now(timezone.utc)))
+                .otherwise(pl.col("updated_at"))
+                .alias("updated_at")
+            )
+            
+            df.write_parquet(INVENTORY_PATH)
+            logger.info("Cleaned up %d old ready videos (marked as expired)", deleted_count)
+            
+    except Exception:
+        logger.exception("Failed during cleanup of old ready videos")
+        raise
+    
+    return deleted_count

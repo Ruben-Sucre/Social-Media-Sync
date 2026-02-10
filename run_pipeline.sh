@@ -9,6 +9,9 @@ echo "   Hashtag: #$HASHTAG"
 echo "   Max videos: $MAX_VIDEOS"
 echo ""
 
+# Run cleanup of old ready videos first (48h default)
+docker exec social-media-sync-n8n python3 -m scripts.cleanup --hours 48 2>/dev/null || true
+
 docker exec social-media-sync-n8n python3 -c "
 from scripts.ingestor import ingest_from_hashtag
 result = ingest_from_hashtag('https://www.tiktok.com/tag/$HASHTAG', max_videos=$MAX_VIDEOS)
