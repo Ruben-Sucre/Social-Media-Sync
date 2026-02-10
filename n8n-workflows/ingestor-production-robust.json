@@ -20,6 +20,10 @@
             {
               "name": "max_videos",
               "value": "1"
+            },
+            {
+              "name": "debug_set",
+              "value": "activo"
             }
           ]
         },
