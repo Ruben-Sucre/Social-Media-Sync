@@ -5,20 +5,60 @@ Sistema de sincronización y edición aleatoria de video (ingestión → edició
 ## Descripción
 
 Social-Media-Sync es un conjunto de utilidades y scripts para:
-- descubrir/ingestar videos usando `yt-dlp` y registrar metadatos en un inventario Parquet,
+- descubrir/ingestar videos de TikTok usando `yt-dlp` + `playwright` y registrar metadatos en un inventario Parquet,
 - aplicar transformaciones aleatorias y ligeras (zoom, espejo, color, velocidad) para generar contenido único con MoviePy,
-- exponer utilidades para integración con orquestadores (por ejemplo `n8n`) para publicar y marcar videos.
+- exponer utilidades para integración con orquestadores (por ejemplo `n8n`) para publicar y marcar videos,
+- **auto-limpieza** de videos procesados que no se publican dentro de 48 horas.
 
 El proyecto está optimizado para `polars-lts-cpu` y maneja timestamps en UTC para compatibilidad y reproducibilidad.
 
+## 🚀 Quick Start
+
+```bash
+# Clonar e iniciar
+git clone https://github.com/Ruben-Sucre/Social-Media-Sync.git
+cd Social-Media-Sync
+docker compose up -d --build
+
+# Instalar dependencias en el contenedor (primera vez)
+docker exec --user root social-media-sync-n8n pip install curl_cffi
+docker exec --user root social-media-sync-n8n playwright install chromium
+
+# Ejecutar pipeline de ingestión
+./run_pipeline.sh programacion 5    # Descarga 5 videos del hashtag #programacion
+./run_pipeline.sh tech 3            # Descarga 3 videos del hashtag #tech
+
+# Procesar videos (aplicar transformaciones)
+docker exec social-media-sync-n8n python3 -m scripts.editor
+```
+
 ## Tecnologías
 
-- polars-lts-cpu (manipulación rápida de DataFrames y Parquet)
-- MoviePy 2.x (edición de video)
-- yt-dlp (descarga de video)
-- filelock (bloqueo simple para concurrencia) 
+- **polars-lts-cpu** - Manipulación rápida de DataFrames y Parquet
+- **MoviePy 2.x** - Edición de video (zoom, mirror, color, speed)
+- **yt-dlp** - Descarga de video con impersonación Chrome
+- **curl_cffi** - Bypass de protección anti-bot TikTok (403)
+- **Playwright** - Scraping de hashtags TikTok
+- **filelock** - Bloqueo simple para concurrencia
+- **n8n** - Orquestación de workflows (opcional) 
 
 ## Instalación
+
+### Docker (Recomendado)
+
+```bash
+# Clonar repositorio
+git clone https://github.com/Ruben-Sucre/Social-Media-Sync.git
+cd Social-Media-Sync
+
+# Iniciar contenedor
+docker compose up -d --build
+
+# Instalar dependencias adicionales (primera vez)
+docker exec --user root social-media-sync-n8n pip install curl_cffi
+docker exec --user root social-media-sync-n8n playwright install chromium
+docker exec --user root social-media-sync-n8n chmod -R 777 /workspace/social-media-sync/videos /workspace/social-media-sync/data
+```
 
 ### Desarrollo Local
 
@@ -33,6 +73,7 @@ python -m venv .venv
 
 ```bash
 pip install -r requirements.txt
+playwright install chromium
 ```
 
 3. (Opcional) Instalar dependencias de desarrollo:
@@ -41,15 +82,9 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-Notas:
-- Asegúrate de tener `ffmpeg` disponible en el sistema si ejecutas MoviePy contra videos reales (por ejemplo `sudo apt install ffmpeg`).
-- Si trabajas localmente con Playwright (usado por algunas rutinas de scraping), ejecuta:
-
-```bash
-playwright install
-```
-
-El `Dockerfile.n8n` ya instala navegadores Playwright y `ffmpeg` en el contenedor, por lo que estos pasos son necesarios solo para desarrollo local fuera de Docker.
+**Requisitos del sistema:**
+- `ffmpeg` para MoviePy: `sudo apt install ffmpeg`
+- Python 3.12+
 
 ### Despliegue en VM/Producción
 
@@ -63,44 +98,90 @@ Para despliegue en un servidor Linux limpio (Ubuntu/Debian), consulta la [Guía 
 
 2. **Orquestación con n8n:**
 
-   Este repositorio no incluye `docker-compose.yml` por seguridad. Copia `docker-compose.yml.example` a `docker-compose.yml` y crea un archivo `.env` con las variables necesarias antes de ejecutar `docker-compose up -d`.
-
-   Ejemplo:
-
    ```bash
    cp docker-compose.yml.example docker-compose.yml
-   # editar .env según necesidades
-   docker-compose up -d
+   docker compose up -d --build
    ```
 
    Levanta n8n para automatizar workflows de ingestión, edición y publicación.
 
+3. **Configuración robusta:** Ver [PRODUCTION_ROBUST.md](PRODUCTION_ROBUST.md)
+
 ## Uso
 
-- Ingestor: el módulo `scripts/ingestor.py` expone funciones para ingestión (por ejemplo `ingest_from_hashtag`) pero actualmente no tiene un entrypoint CLI `python -m scripts.ingestor`.
-
-   Ejemplo de llamada programática rápida desde la línea de comandos:
-
-   ```bash
-   python -c "from scripts.ingestor import ingest_from_hashtag; ingest_from_hashtag('https://www.tiktok.com/tag/programacion', max_videos=1)"
-   ```
-
-   Si prefieres un CLI, puedo añadir un wrapper `if __name__ == '__main__'` en `scripts/ingestor.py` (
-   dime si quieres que lo implemente).
-
-- Editor: procesa el primer video `pending` y lo transforma/ejecuta export (este módulo sí tiene un entrypoint):
+### Script de Pipeline (Recomendado)
 
 ```bash
-python -m scripts.editor
+# Sintaxis: ./run_pipeline.sh <hashtag> <max_videos>
+./run_pipeline.sh programacion 5    # Descarga 5 videos de #programacion
+./run_pipeline.sh python 3          # Descarga 3 videos de #python
+./run_pipeline.sh tech 10           # Descarga 10 videos de #tech
 ```
 
-- Publicador (CLI): obtener el siguiente procesado, marcar un video como publicado o como fallido (diseñado para ser llamado por orquestadores como n8n):
+El script automáticamente:
+1. Ejecuta cleanup de videos viejos (>48h)
+2. Descarga nuevos videos del hashtag
+3. Muestra el estado del inventario
+
+### Ingestor (Programático)
 
 ```bash
-python -m scripts.publicador --get-next
-python -m scripts.publicador --mark-posted <VIDEO_ID>
-python -m scripts.publicador --mark-failed <VIDEO_ID>
+docker exec social-media-sync-n8n python3 -c "
+from scripts.ingestor import ingest_from_hashtag
+result = ingest_from_hashtag('https://www.tiktok.com/tag/programacion', max_videos=5)
+print(f'Videos descargados: {result}')
+"
 ```
+
+### Editor (Procesar Videos)
+
+Procesa el primer video `pending` aplicando transformaciones aleatorias:
+
+```bash
+# Procesar un video
+docker exec social-media-sync-n8n python3 -m scripts.editor
+
+# Procesar todos los pendientes
+docker exec social-media-sync-n8n python3 -c "
+from scripts.editor import process_pending
+while process_pending() > 0: pass
+"
+```
+
+### Cleanup (Auto-limpieza)
+
+Elimina videos `ready` que no se publicaron después de N horas:
+
+```bash
+# Ver qué se borraría (dry-run)
+docker exec social-media-sync-n8n python3 -m scripts.cleanup --dry-run --hours 48
+
+# Ejecutar cleanup
+docker exec social-media-sync-n8n python3 -m scripts.cleanup --hours 48
+```
+
+### Publicador (CLI)
+
+```bash
+# Obtener siguiente video listo
+docker exec social-media-sync-n8n python3 -m scripts.publicador --get-next
+
+# Marcar como publicado
+docker exec social-media-sync-n8n python3 -m scripts.publicador --mark-posted <VIDEO_ID>
+
+# Marcar como fallido
+docker exec social-media-sync-n8n python3 -m scripts.publicador --mark-failed <VIDEO_ID>
+```
+
+## Estados del Inventario
+
+| Status | Descripción |
+|--------|-------------|
+| `pending` | Video descargado, esperando procesamiento |
+| `ready` | Video procesado, listo para publicar |
+| `posted` | Video publicado exitosamente |
+| `failed` | Error en descarga/procesamiento/publicación |
+| `expired` | Video eliminado por auto-cleanup (>48h sin publicar) |
 
 ## Pruebas
 

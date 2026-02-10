@@ -19,3 +19,4 @@ ruff==0.15.0
 tqdm==4.67.3
 yt-dlp==2026.1.31
 playwright==1.49.1
+curl_cffi>=0.14.0
