@@ -26,6 +26,20 @@ from scripts.common import (
 import polars as pl
 
 
+def _get_video_path(video_id: str) -> Optional[Path]:
+    """Get the local path for a video by its ID."""
+    try:
+        if not INVENTORY_PATH.exists():
+            return None
+        df = pl.read_parquet(INVENTORY_PATH)
+        row = df.filter(pl.col("video_id") == video_id).to_dicts()
+        if row and row[0].get("path_local"):
+            return BASE_DIR / Path(row[0]["path_local"])
+    except Exception:
+        logger.exception("Failed to get video path for %s", video_id)
+    return None
+
+
 def cli_get_next() -> Optional[str]:
     """Return the next processed video path that exists on disk.
 
@@ -84,9 +98,24 @@ def cli_get_next() -> Optional[str]:
 
 
 def cli_mark_posted(video_id: str) -> bool:
+    """Mark a video as posted and delete the processed file.
+    
+    After successful publication, the processed file is no longer needed
+    and is deleted to free up disk space.
+    """
+    # First, get the path before updating status
+    processed_path = _get_video_path(video_id)
+    
     ok = update_inventory_by_video_id(video_id, {"status_fb": "posted"})
     if ok:
         logger.info("Marked %s as posted", video_id)
+        # Delete processed file immediately after marking as posted
+        if processed_path and processed_path.exists():
+            try:
+                processed_path.unlink()
+                logger.info("Deleted processed file: %s", processed_path)
+            except Exception as del_exc:
+                logger.warning("Could not delete processed file %s: %s", processed_path, del_exc)
     else:
         logger.warning("Could not find %s to mark as posted", video_id)
     return ok

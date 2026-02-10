@@ -132,6 +132,13 @@ def process_pending() -> int:
             },
         )
 
+        # Delete raw file immediately after successful processing
+        try:
+            src.unlink()
+            logger.info("Deleted raw file: %s", src)
+        except Exception as del_exc:
+            logger.warning("Could not delete raw file %s: %s", src, del_exc)
+
         logger.info("Processed and transformed %s -> %s", src, dst)
         return 1
     except Exception as exc:
