@@ -48,19 +48,25 @@ COPY requirements.txt .
 # Instalar dependencias de Python
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# Instalar curl_cffi para impersonation en yt-dlp (evita bloqueos 403 de TikTok)
+RUN pip3 install --no-cache-dir curl_cffi
+
 # Instalar Playwright y navegadores
 # Cambiar a usuario node primero para que los navegadores se instalen en su home
 RUN pip3 install playwright==1.49.1
 
-# Instalar navegadores como usuario node
-RUN mkdir -p /home/node/.cache && \
-    chown -R node:node /home/node/.cache
+# Crear directorio para navegadores de Playwright accesible por todos
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN mkdir -p /ms-playwright && chmod 777 /ms-playwright
 
-USER node
+# Instalar navegadores como root (accesible para todos los usuarios)
 RUN playwright install chromium
 
-USER root
 RUN playwright install-deps chromium || true
+
+# Crear cache para node user
+RUN mkdir -p /home/node/.cache && \
+    chown -R node:node /home/node/.cache
 
 # Variables de entorno para Python y n8n
 ENV PYTHONUNBUFFERED=1 \

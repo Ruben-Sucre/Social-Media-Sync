@@ -20,6 +20,7 @@ from scripts.utils import random_wait, retry
 
 from fake_useragent import UserAgent
 from yt_dlp import YoutubeDL
+from yt_dlp.networking.impersonate import ImpersonateTarget
 import polars as pl
 
 from scripts.common import (
@@ -279,6 +280,8 @@ def ingest(source_url: str, retries: int = 3) -> None:
         "skip_download": True,
         "noplaylist": True,
         "user_agent": user_agent,
+        # Use impersonation to bypass TikTok 403 blocks
+        "impersonate": ImpersonateTarget(client="chrome"),
         # human-like ytdlp sleep hints
         "sleep_interval": 3,
         "max_sleep_interval": 10,
@@ -312,7 +315,8 @@ def ingest(source_url: str, retries: int = 3) -> None:
         logger.info("No new videos found")
         return
 
-    target_url = target_entry.get("url") or target_entry.get("webpage_url")
+    # Prefer webpage_url over url (CDN URL) as CDN URLs expire quickly
+    target_url = target_entry.get("webpage_url") or target_entry.get("url")
     if not target_url:
         logger.warning("Candidate video missing URL, skipping download")
         return
@@ -322,6 +326,8 @@ def ingest(source_url: str, retries: int = 3) -> None:
         "format": "bestvideo+bestaudio/best",
         "noplaylist": True,
         "user_agent": user_agent,
+        # Use impersonation to bypass TikTok 403 blocks
+        "impersonate": ImpersonateTarget(client="chrome"),
         # hints for yt-dlp to act more human-like
         "sleep_interval": 3,
         "max_sleep_interval": 10,
